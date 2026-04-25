@@ -5,265 +5,266 @@ import Link from 'next/link'
 import { useApp } from '@/context/AppContext'
 import { Task } from '@/lib/types'
 import {
-  isOverdue,
-  isDueToday,
-  isDueSoon,
-  isUnassigned,
-  isWaitingReview,
-  formatDateShort,
-  countDaysUntilEvent,
+  isOverdue, isDueToday, isDueSoon, isUnassigned, isWaitingReview,
+  formatDateShort, countDaysUntilEvent,
 } from '@/lib/taskUtils'
-import StatsCard from './StatsCard'
 import TaskStatusBadge from '@/components/tasks/TaskStatusBadge'
 import TaskEditModal from '@/components/tasks/TaskEditModal'
-import { Plus, CalendarDays, AlertTriangle, User, Calendar, ChevronRight } from 'lucide-react'
+import { Plus, CalendarDays, User, Calendar, ChevronRight } from 'lucide-react'
 
-type FilterKey = 'overdue' | 'today' | 'soon' | 'unassigned' | 'review' | null
+interface DangerSection {
+  key: string
+  icon: string
+  label: string
+  color: string
+  bgColor: string
+  borderColor: string
+  leftBorder: string
+  filter: (t: Task) => boolean
+}
+
+const SECTIONS: DangerSection[] = [
+  { key: 'overdue', icon: '🔴', label: '期限切れ', color: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-200', leftBorder: '#ef4444', filter: (t) => isOverdue(t) && t.status !== 'done' },
+  { key: 'today',   icon: '🟠', label: '今日まで', color: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200', leftBorder: '#f97316', filter: (t) => isDueToday(t) && t.status !== 'done' },
+  { key: 'soon',    icon: '🟡', label: '3日以内',  color: 'text-yellow-700', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200', leftBorder: '#eab308', filter: (t) => isDueSoon(t) && t.status !== 'done' },
+  { key: 'unassigned', icon: '🟣', label: '未担当', color: 'text-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', leftBorder: '#8b5cf6', filter: (t) => isUnassigned(t) && t.status !== 'done' },
+  { key: 'review',  icon: '🔵', label: '確認待ち', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', leftBorder: '#3b82f6', filter: isWaitingReview },
+]
 
 export default function DashboardClient() {
   const { events, tasks, updateTask } = useApp()
-  const [activeFilter, setActiveFilter] = useState<FilterKey>(null)
   const [editing, setEditing] = useState<Task | null>(null)
 
   const activeTasks = tasks.filter((t) => t.status !== 'done')
+  const sectionCounts = SECTIONS.map((s) => ({
+    key: s.key,
+    count: tasks.filter(s.filter).length,
+  }))
 
-  const overdue = activeTasks.filter(isOverdue)
-  const today = activeTasks.filter(isDueToday)
-  const soon = activeTasks.filter(isDueSoon)
-  const unassigned = activeTasks.filter(isUnassigned)
-  const review = tasks.filter(isWaitingReview)
+  const allDangerTasks = tasks.filter(
+    (t) => t.status !== 'done' && SECTIONS.slice(0, 4).some((s) => s.filter(t))
+    || isWaitingReview(t)
+  )
 
-  function getFilteredTasks(): Task[] {
-    switch (activeFilter) {
-      case 'overdue': return overdue
-      case 'today': return today
-      case 'soon': return soon
-      case 'unassigned': return unassigned
-      case 'review': return review
-      default: return []
-    }
+  function getEventName(eventId: string) {
+    return events.find((e) => e.id === eventId)?.name ?? '不明'
   }
-
-  const filteredTasks = getFilteredTasks()
 
   function getMembersForTask(task: Task): string[] {
-    const event = events.find((e) => e.id === task.eventId)
-    return event ? event.members : []
+    return events.find((e) => e.id === task.eventId)?.members ?? []
   }
 
-  function getAllMembersForTask(task: Task): string[] {
-    return getMembersForTask(task)
+  function getDangerBorderColor(task: Task): string {
+    if (isOverdue(task)) return '#ef4444'
+    if (isDueToday(task)) return '#f97316'
+    if (isDueSoon(task)) return '#eab308'
+    if (isUnassigned(task)) return '#8b5cf6'
+    return '#3b82f6'
   }
-
-  function getEventName(eventId: string): string {
-    return events.find((e) => e.id === eventId)?.name ?? '不明なイベント'
-  }
-
-  const statsConfig = [
-    {
-      key: 'overdue' as FilterKey,
-      icon: '🔴',
-      label: '期限切れ',
-      count: overdue.length,
-      color: 'text-red-700',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200',
-    },
-    {
-      key: 'today' as FilterKey,
-      icon: '🟠',
-      label: '今日まで',
-      count: today.length,
-      color: 'text-orange-700',
-      bgColor: 'bg-orange-50',
-      borderColor: 'border-orange-200',
-    },
-    {
-      key: 'soon' as FilterKey,
-      icon: '🟡',
-      label: '3日以内',
-      count: soon.length,
-      color: 'text-yellow-700',
-      bgColor: 'bg-yellow-50',
-      borderColor: 'border-yellow-200',
-    },
-    {
-      key: 'unassigned' as FilterKey,
-      icon: '🟣',
-      label: '未担当',
-      count: unassigned.length,
-      color: 'text-violet-700',
-      bgColor: 'bg-violet-50',
-      borderColor: 'border-violet-200',
-    },
-    {
-      key: 'review' as FilterKey,
-      icon: '🔵',
-      label: '確認待ち',
-      count: review.length,
-      color: 'text-blue-700',
-      bgColor: 'bg-blue-50',
-      borderColor: 'border-blue-200',
-    },
-  ]
 
   if (events.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center">
-          <div className="text-6xl mb-4">🌏</div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">イベントがまだありません</h2>
-          <p className="text-slate-500 mb-8">
-            最初のイベントを作成して、準備タスクを自動生成しましょう
-          </p>
-          <Link
-            href="/events/new"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors"
-          >
-            <Plus size={18} />
-            最初のイベントを作成する
-          </Link>
-        </div>
+      <div className="text-center py-20">
+        <div className="text-6xl mb-4">🌏</div>
+        <h2 className="text-xl font-bold text-slate-900 mb-2">イベントがまだありません</h2>
+        <p className="text-slate-500 mb-8">最初のイベントを作成して、準備タスクを自動生成しましょう</p>
+        <Link
+          href="/events/new"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors"
+        >
+          <Plus size={18} />
+          最初のイベントを作成する
+        </Link>
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      {/* Stats grid */}
+    <>
+      {/* ─── Summary cards ─── */}
       <section className="mb-8">
-        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
-          全イベント横断 — 要確認タスク
-        </h2>
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+          ⚡ 危険タスクサマリー — 今すぐ対応が必要なタスク数
+        </p>
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-          {statsConfig.map((s) => (
-            <StatsCard
+          {SECTIONS.map((s, i) => (
+            <div
               key={s.key}
-              icon={s.icon}
-              label={s.label}
-              count={s.count}
-              color={s.color}
-              bgColor={s.bgColor}
-              borderColor={s.borderColor}
-              onClick={() => setActiveFilter(activeFilter === s.key ? null : s.key)}
-            />
+              className={`flex flex-col items-center justify-center gap-1 p-3 sm:p-4 rounded-2xl border-2 ${s.bgColor} ${s.borderColor}`}
+            >
+              <span className="text-xl sm:text-2xl">{s.icon}</span>
+              <span className={`text-2xl sm:text-3xl font-bold leading-none ${s.color}`}>
+                {sectionCounts[i].count}
+              </span>
+              <span className={`text-[11px] sm:text-xs font-medium ${s.color}`}>{s.label}</span>
+            </div>
           ))}
         </div>
       </section>
 
-      {/* Filtered task list */}
-      {activeFilter && (
+      {/* ─── Danger task table (desktop) ─── */}
+      {allDangerTasks.length > 0 && (
         <section className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-slate-700">
-              {statsConfig.find((s) => s.key === activeFilter)?.icon}{' '}
-              {statsConfig.find((s) => s.key === activeFilter)?.label} タスク一覧
-            </h2>
-            <button
-              onClick={() => setActiveFilter(null)}
-              className="text-xs text-slate-400 hover:text-slate-600"
-            >
-              閉じる
-            </button>
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">🚨 危険タスク一覧</h2>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500">
+                  <th className="text-left py-3 px-4 font-semibold">タスク名</th>
+                  <th className="text-left py-3 px-4 font-semibold">イベント</th>
+                  <th className="text-left py-3 px-4 font-semibold">担当者</th>
+                  <th className="text-left py-3 px-4 font-semibold">期限</th>
+                  <th className="text-left py-3 px-4 font-semibold">状態</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allDangerTasks.map((task) => (
+                  <tr
+                    key={task.id}
+                    onClick={() => setEditing(task)}
+                    className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                  >
+                    <td className="py-3 px-4 font-medium text-slate-800">{task.title}</td>
+                    <td className="py-3 px-4 text-xs text-indigo-600 font-medium">{getEventName(task.eventId)}</td>
+                    <td className="py-3 px-4">
+                      {task.assignee ? (
+                        <span className="flex items-center gap-1.5 text-sm">
+                          <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">
+                            {task.assignee[0]}
+                          </span>
+                          {task.assignee}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-violet-600 font-medium flex items-center gap-1">
+                          <User size={11} /> 未担当
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-xs text-slate-500 flex items-center gap-1">
+                      <Calendar size={11} /> {formatDateShort(task.dueDate)}
+                    </td>
+                    <td className="py-3 px-4">
+                      <TaskStatusBadge status={task.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          {filteredTasks.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 bg-white rounded-xl border border-slate-200">
-              該当タスクなし
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
-              {filteredTasks.map((task) => (
-                <button
-                  key={task.id}
-                  onClick={() => setEditing(task)}
-                  className="w-full text-left flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-xs text-indigo-500 font-medium">
-                        {getEventName(task.eventId)}
-                      </span>
-                      <TaskStatusBadge status={task.status} />
-                    </div>
-                    <p className="text-sm font-medium text-slate-800 truncate">{task.title}</p>
-                    <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                      <span className="flex items-center gap-1">
-                        <User size={11} />
-                        {task.assignee ?? <span className="text-violet-500">未担当</span>}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar size={11} />
-                        {formatDateShort(task.dueDate)}
-                      </span>
-                    </div>
-                  </div>
-                  <AlertTriangle size={14} className="text-slate-300 flex-shrink-0" />
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Mobile cards with left-border accent */}
+          <div className="sm:hidden space-y-2">
+            <p className="text-xs text-slate-400 mb-2">今すぐ対応</p>
+            {allDangerTasks.map((task) => (
+              <button
+                key={task.id}
+                onClick={() => setEditing(task)}
+                className="w-full text-left bg-white rounded-xl border border-slate-200 p-3.5 hover:shadow-sm transition-shadow"
+                style={{ borderLeft: `3px solid ${getDangerBorderColor(task)}` }}
+              >
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <span className="text-sm font-bold text-slate-800 leading-snug">{task.title}</span>
+                  <TaskStatusBadge status={task.status} />
+                </div>
+                <div className="text-xs text-indigo-500 font-medium mb-1">{getEventName(task.eventId)}</div>
+                <div className="flex items-center gap-3 text-xs text-slate-500">
+                  <span className="flex items-center gap-1">
+                    <User size={11} />
+                    {task.assignee ?? <span className="text-violet-500">未担当</span>}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Calendar size={11} /> 期限: {formatDateShort(task.dueDate)}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
-      {/* Event list */}
+      {/* ─── Upcoming events ─── */}
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
-            イベント一覧
+            📅 近日開催イベント
           </h2>
           <Link href="/events" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
             すべて見る <ChevronRight size={14} />
           </Link>
         </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {events.slice(0, 6).map((event) => {
-            const eventTasks = tasks.filter((t) => t.eventId === event.id)
+            const et = tasks.filter((t) => t.eventId === event.id)
             const daysLeft = countDaysUntilEvent(event.date)
-            const overdueCnt = eventTasks.filter((t) => isOverdue(t) && t.status !== 'done').length
-            const unassignedCnt = eventTasks.filter((t) => isUnassigned(t) && t.status !== 'done').length
+            const overdueCnt = et.filter((t) => isOverdue(t) && t.status !== 'done').length
+            const unassignedCnt = et.filter((t) => isUnassigned(t) && t.status !== 'done').length
+            const doneCnt = et.filter((t) => t.status === 'done').length
+            const pct = et.length ? Math.round((doneCnt / et.length) * 100) : 0
+            const hasDanger = overdueCnt > 0 || unassignedCnt > 0
+
             return (
               <Link
                 key={event.id}
                 href={`/events/${event.id}`}
-                className="bg-white rounded-xl border border-slate-200 hover:border-indigo-200 hover:shadow-sm transition-all p-4"
+                className={`block bg-white rounded-xl border-2 p-4 hover:shadow-md transition-all ${
+                  hasDanger ? 'border-red-200 bg-red-50/30' : 'border-slate-200 hover:border-indigo-200'
+                }`}
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3 className="font-semibold text-slate-900 text-sm leading-snug">{event.name}</h3>
-                  {overdueCnt > 0 && (
-                    <span className="flex-shrink-0 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">
-                      {overdueCnt}件期限切れ
+                  <h3 className="font-bold text-slate-900 text-sm leading-snug">{event.name}</h3>
+                  {hasDanger && (
+                    <span className="flex-shrink-0 text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">
+                      要注意
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
-                  <CalendarDays size={12} />
+
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-3">
+                  <CalendarDays size={11} />
                   {daysLeft < 0 ? '終了済み' : daysLeft === 0 ? '本日開催' : `あと${daysLeft}日`}
                 </div>
+
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                    未完了 {et.filter((t) => t.status !== 'done').length}
+                  </span>
+                  {overdueCnt > 0 && (
+                    <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">
+                      期限切れ {overdueCnt}
+                    </span>
+                  )}
+                  {unassignedCnt > 0 && (
+                    <span className="text-xs bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-medium">
+                      未担当 {unassignedCnt}
+                    </span>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                  <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
                     <div
-                      className="bg-green-500 h-1.5 rounded-full"
+                      className="h-2 rounded-full"
                       style={{
-                        width: `${eventTasks.length ? (eventTasks.filter((t) => t.status === 'done').length / eventTasks.length) * 100 : 0}%`,
+                        width: `${pct}%`,
+                        background: pct < 30 ? '#f97316' : '#22c55e',
                       }}
                     />
                   </div>
-                  <span className="text-xs text-slate-400">
-                    {eventTasks.filter((t) => t.status === 'done').length}/{eventTasks.length}
-                  </span>
+                  <span className="text-xs text-slate-500 whitespace-nowrap">{pct}%</span>
                 </div>
               </Link>
             )
           })}
-        </div>
-        <div className="mt-4">
+
           <Link
             href="/events/new"
-            className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-xl transition-colors text-sm font-medium"
+            className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50 rounded-xl text-slate-400 hover:text-indigo-600 transition-all min-h-[140px]"
           >
-            <Plus size={16} />
-            新しいイベントを作成
+            <Plus size={24} />
+            <span className="text-sm font-medium">新しいイベントを作成</span>
           </Link>
         </div>
       </section>
@@ -271,11 +272,11 @@ export default function DashboardClient() {
       {editing && (
         <TaskEditModal
           task={editing}
-          members={getAllMembersForTask(editing)}
+          members={getMembersForTask(editing)}
           onSave={updateTask}
           onClose={() => setEditing(null)}
         />
       )}
-    </div>
+    </>
   )
 }
