@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useApp } from '@/context/AppContext'
 import { isOverdue, isDueToday, isDueSoon, isUnassigned, isWaitingReview } from '@/lib/taskUtils'
 import { LayoutDashboard, CalendarDays, AlertTriangle, Plus } from 'lucide-react'
+import GoogleConnectButton from '@/components/google/GoogleConnectButton'
 
 export default function Sidebar() {
   const pathname = usePathname()
@@ -62,6 +63,11 @@ export default function Sidebar() {
           新規イベント
         </Link>
       </nav>
+
+      <div className="mt-auto px-2 pb-2 pt-3 border-t border-slate-200">
+        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide mb-2 px-1">Google連携</p>
+        <GoogleConnectButton />
+      </div>
     </aside>
   )
 }

@@ -12,6 +12,8 @@ export interface Event {
   recruitmentStartDate?: string
   recruitmentDeadline?: string
   members: [string, string, string] // exactly 3 members
+  googleCalendarEventId?: string
+  googleTaskListId?: string
   createdAt: string
   updatedAt: string
 }

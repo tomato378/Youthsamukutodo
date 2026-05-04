@@ -13,6 +13,7 @@ import {
   PHASE_COLORS,
   PHASE_BAR_COLORS,
 } from '@/lib/scheduleUtils'
+import GoogleConnectButton from '@/components/google/GoogleConnectButton'
 import {
   Check, ChevronRight, ChevronLeft, Loader2,
   Calendar, MapPin, Users, FileText, AlertCircle,
@@ -36,7 +37,7 @@ const PHASE_HEADER: Record<number, { label: string; icon: string; accent: string
 
 export default function EventForm() {
   const router = useRouter()
-  const { createEvent } = useApp()
+  const { createEvent, googleSession, syncEventToGoogle } = useApp()
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [step1, setStep1] = useState<Step1Data>({ name: '', date: '', time: '', venue: '', description: '' })
@@ -76,7 +77,7 @@ export default function EventForm() {
   }
   function goBack() { setErrors({}); setStep((s) => s - 1) }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     setLoading(true)
     try {
       const data: Omit<Event, 'id' | 'createdAt' | 'updatedAt'> = {
@@ -91,6 +92,16 @@ export default function EventForm() {
         members: [step2.members[0].trim(), step2.members[1].trim(), step2.members[2].trim()],
       }
       const event = createEvent(data)
+
+      // Auto-sync to Google if connected (best-effort — failure won't block navigation)
+      if (googleSession) {
+        try {
+          await syncEventToGoogle(event.id)
+        } catch (e) {
+          console.error('Google 同期に失敗しました:', e)
+        }
+      }
+
       router.push(`/events/${event.id}`)
     } finally {
       setLoading(false)
@@ -346,6 +357,23 @@ export default function EventForm() {
                 集客計画からフライヤー完成、SNS告知、最終確認まで網羅
               </p>
             </div>
+          </div>
+
+          {/* Google sync status */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold text-slate-500 mb-2">Google連携</p>
+            {googleSession ? (
+              <div className="flex items-center gap-2 text-xs text-green-700">
+                <span className="font-bold text-sm leading-none">G</span>
+                <span>{googleSession.email} で連携中</span>
+                <span className="ml-auto text-green-600 font-medium">✓ 作成時に自動同期します</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-400">連携するとGoogleカレンダー・Google Todoに自動追加されます</p>
+                <GoogleConnectButton />
+              </div>
+            )}
           </div>
 
           {/* Phase-grouped task list */}

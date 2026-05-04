@@ -12,7 +12,7 @@ import {
 import TaskTableView from '@/components/tasks/TaskTableView'
 import TaskKanbanView from '@/components/tasks/TaskKanbanView'
 import TaskDangerView from '@/components/tasks/TaskDangerView'
-import { ArrowLeft, MapPin, Calendar, List, Columns, AlertTriangle, Trash2 } from 'lucide-react'
+import { ArrowLeft, MapPin, Calendar, List, Columns, AlertTriangle, Trash2, RefreshCw } from 'lucide-react'
 
 type ViewMode = 'table' | 'kanban' | 'danger'
 
@@ -20,9 +20,11 @@ interface Props { eventId: string }
 
 export default function EventDetailClient({ eventId }: Props) {
   const router = useRouter()
-  const { events, tasks, updateTask, deleteEvent } = useApp()
+  const { events, tasks, updateTask, deleteEvent, googleSession, syncEventToGoogle } = useApp()
   const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   const event = events.find((e) => e.id === eventId)
   const eventTasks = tasks.filter((t) => t.eventId === eventId)
@@ -48,6 +50,20 @@ export default function EventDetailClient({ eventId }: Props) {
   }
   const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0
   const dangerCount = stats.overdue + stats.today + stats.unassigned + stats.review
+
+  const isSynced = !!(event.googleCalendarEventId && event.googleTaskListId)
+
+  async function handleSync() {
+    setSyncing(true)
+    setSyncError(null)
+    try {
+      await syncEventToGoogle(eventId)
+    } catch (e) {
+      setSyncError(e instanceof Error ? e.message : '同期に失敗しました')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const VIEWS: { key: ViewMode; label: string; icon: React.ReactNode }[] = [
     { key: 'table',  label: '一覧表ビュー', icon: <List size={14} /> },
@@ -87,6 +103,31 @@ export default function EventDetailClient({ eventId }: Props) {
                 {event.venue}
               </span>
             </div>
+
+            {/* Google sync badges */}
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {event.googleCalendarEventId && (
+                <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full font-medium">
+                  <span className="font-bold">G</span> カレンダー同期済み
+                </span>
+              )}
+              {event.googleTaskListId && (
+                <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-600 border border-green-200 px-2 py-0.5 rounded-full font-medium">
+                  <span className="font-bold">G</span> Todo同期済み
+                </span>
+              )}
+              {!isSynced && googleSession && (
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="inline-flex items-center gap-1 text-xs bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 px-2 py-0.5 rounded-full font-medium transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw size={10} className={syncing ? 'animate-spin' : ''} />
+                  {syncing ? '同期中...' : 'Googleに同期する'}
+                </button>
+              )}
+            </div>
+            {syncError && <p className="text-xs text-red-500 mt-1">{syncError}</p>}
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
